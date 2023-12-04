@@ -9,10 +9,6 @@ for COMMAND_DEPENDENCY in "jq" "wget"; do
   fi
 done
 
-HOMEBREW_PREFIX=$(brew --prefix)
-
-ARCH_THIS=$(uname -m)
-ARCH_OTHER=$([ "$ARCH_THIS" == "arm64" ] && echo "x86_64" || echo "arm64")
 MACOS_VERSION=$(/usr/bin/sw_vers -productVersion)
 
 case $MACOS_VERSION in
@@ -32,7 +28,20 @@ if [ -z "$MACOS_RELEASE" ]; then
   exit 1
 fi
 
-DOWNLOAD_PROPERTY="$([ "$ARCH_OTHER" == "x86_64" ] && echo "" || echo "${ARCH_OTHER}_")$MACOS_RELEASE"
+HOMEBREW_PREFIX=$(brew --prefix)
+ARCH_THIS=$(uname -m)
+
+if [ "$ARCH_THIS" == "arm64" ]; then
+  ARCH_OTHER=x86_64
+  HOMEBREW_PREFIX_OTHER=/usr/local
+  DOWNLOAD_PROPERTY=$MACOS_RELEASE
+else
+  ARCH_OTHER=arm64
+  HOMEBREW_PREFIX_OTHER=/opt/homebrew
+  DOWNLOAD_PROPERTY="arm64_$MACOS_RELEASE"
+fi
+
+HOMEBREW_CELLAR_OTHER=$HOMEBREW_PREFIX_OTHER/Cellar
 
 WORK_DIR=$(mktemp -d)
 
@@ -71,6 +80,23 @@ for MERGING_LIB in $(find $WORK_DIR -iname '*.dylib' -type f); do
 
   if [ ! -f $BACKUP_FILENAME ]; then
     cp $EXISTING_LIB $BACKUP_FILENAME
+  fi
+
+  INSTALL_NAME_TOOL_ARGS=""
+
+  for DEP_LIB_FILENAME in $(otool -L -arch $ARCH_OTHER $MERGING_LIB | grep -Eo '@@HOMEBREW_(PREFIX|CELLAR)@@\S+'); do
+    NEW_DEP_LIB_FILENAME=${DEP_LIB_FILENAME/@@HOMEBREW_PREFIX@@/$HOMEBREW_PREFIX_OTHER}
+    NEW_DEP_LIB_FILENAME=${NEW_DEP_LIB_FILENAME/@@HOMEBREW_CELLAR@@/$HOMEBREW_CELLAR_OTHER}
+
+    if [ "$(basename $NEW_DEP_LIB_FILENAME)" == "$(basename $MERGING_LIB)" ]; then
+      INSTALL_NAME_TOOL_ARGS+="-id $NEW_DEP_LIB_FILENAME "
+    else
+      INSTALL_NAME_TOOL_ARGS+="-change $DEP_LIB_FILENAME $NEW_DEP_LIB_FILENAME "
+    fi
+  done
+
+  if [ ${#INSTALL_NAME_TOOL_ARGS} -ne 0 ]; then
+    install_name_tool $INSTALL_NAME_TOOL_ARGS $MERGING_LIB
   fi
 
   lipo -create $BACKUP_FILENAME $MERGING_LIB -output $EXISTING_LIB
