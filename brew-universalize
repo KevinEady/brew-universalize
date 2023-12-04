@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+set -e
+
+for COMMAND_DEPENDENCY in "jq" "wget"; do
+  if ! command -v $COMMAND_DEPENDENCY &> /dev/null; then
+      printf "'$COMMAND_DEPENDENCY' could not be found. Install via: brew install $COMMAND_DEPENDENCY\n" >&2
+      exit 1
+  fi
+done
+
+HOMEBREW_PREFIX=$(brew --prefix)
+
+ARCH_THIS=$(uname -m)
+ARCH_OTHER=$([ "$ARCH_THIS" == "arm64" ] && echo "x86_64" || echo "arm64")
+
+case $(sw_vers --productVersion) in
+14.*) MACOS_VERSION="sonoma" ;;
+13.*) MACOS_VERSION="ventura" ;;
+12.*) MACOS_VERSION="monterey" ;;
+11.*) MACOS_VERSION="big_sur" ;;
+10.15.*) MACOS_VERSION="catalina" ;;
+10.14.*) MACOS_VERSION="mojave" ;;
+10.13.*) MACOS_VERSION="high_sierra" ;;
+10.12.*) MACOS_VERSION="sierra" ;;
+10.11.*) MACOS_VERSION="el_capitan" ;;
+esac
+
+if [ -z "$MACOS_VERSION" ]; then
+  printf "Cannot get macOS version\n" >&2
+  exit 1
+fi
+
+DOWNLOAD_PROPERTY="$([ "$ARCH_OTHER" == "x86_64" ] && echo "" || echo "${ARCH_OTHER}_")$MACOS_VERSION"
+
+WORK_DIR=$(mktemp -d)
+
+echo "Homebrew prefix: $HOMEBREW_PREFIX"
+echo "macOS version: $MACOS_VERSION $ARCH_THIS"
+echo "Universify via lipo'ing $ARCH_OTHER"
+echo "formulae.brew.sh download property: $DOWNLOAD_PROPERTY"
+echo "Work directory: $WORK_DIR"
+
+DOWNLOAD_URLS=$(brew info --json $@ | jq -r '.[] | .bottle.stable.files[. = "'$DOWNLOAD_PROPERTY'"].url')
+
+echo "$DOWNLOAD_URLS" | wget -P $WORK_DIR --header "Authorization: Bearer QQ==" -i -
+
+for DOWNLOAD_URL in $DOWNLOAD_URLS; do
+  tar xfz $WORK_DIR/$(basename $DOWNLOAD_URL) -C $WORK_DIR
+done
+
+for MERGING_LIB in $(find $WORK_DIR -iname '*.dylib' -type f); do
+  EXISTING_LIB="${MERGING_LIB/$WORK_DIR/$HOMEBREW_PREFIX/Cellar}"
+  MERGING_ARCH=$(lipo -archs $MERGING_LIB)
+
+  if [ ! -f $EXISTING_LIB ]; then
+    echo "$EXISTING_LIB does not exist to merge $MERGING_LIB [$MERGING_ARCH]"
+    continue
+  fi
+
+  EXISTING_ARCH=$(lipo -archs $EXISTING_LIB)
+
+  if [ "$EXISTING_ARCH" = "x86_64 arm64" ]; then
+    echo "$EXISTING_LIB [$EXISTING_ARCH] -> already universal"
+    continue
+  fi
+
+  BACKUP_FILENAME=${EXISTING_LIB%.dylib}.$EXISTING_ARCH.dylib
+
+  echo "$EXISTING_LIB [$EXISTING_ARCH] -> $BACKUP_FILENAME and merging $MERGING_LIB [$MERGING_ARCH]"
+
+  if [ ! -f $BACKUP_FILENAME ]; then
+    cp $EXISTING_LIB $BACKUP_FILENAME
+  fi
+
+  lipo -create $BACKUP_FILENAME $MERGING_LIB -output $EXISTING_LIB
+done
+
+rm -rf $WORK_DIR
