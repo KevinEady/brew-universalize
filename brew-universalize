@@ -97,10 +97,10 @@ for MERGING_LIB in $(find $WORK_DIR -iname '*.dylib' -type f); do
 
   if [ ${#INSTALL_NAME_TOOL_ARGS} -ne 0 ]; then
     install_name_tool $INSTALL_NAME_TOOL_ARGS $MERGING_LIB
-    codesign -s - $MERGING_LIB || true
   fi
 
   lipo -create $BACKUP_FILENAME $MERGING_LIB -output $EXISTING_LIB
+  codesign -s - $EXISTING_LIB || true
 done
 
 rm -rf $WORK_DIR
