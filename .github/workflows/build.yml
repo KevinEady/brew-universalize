@@ -10,7 +10,10 @@ jobs:
       - uses: actions/checkout@v3
       - name: Test
         run: |
+          set -e
           /usr/bin/sw_vers -productVersion
           brew install openssl@1.1 glib-openssl mysql-client mysql-connector-c++ openssl@3
           ./brew-universalize openssl@1.1 glib-openssl mysql-client mysql-connector-c++ openssl@3
-          find $(brew --prefix)/Cellar/openssl@1.1 -iname '*.dylib' -not -iname '*.arm64.dylib' -not -iname '*.x86_64.dylib' -type f -exec otool -arch all -L {} \;
+          for f in $(find $(brew --prefix)/Cellar/openssl@1.1 -iname '*.dylib' -not -iname '*.arm64.dylib' -not -iname '*.x86_64.dylib' -type f); do
+            otool -arch all -L $f && codesign --verify $f && echo "Signing verified for $f";
+          done
