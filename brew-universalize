@@ -13,32 +13,33 @@ HOMEBREW_PREFIX=$(brew --prefix)
 
 ARCH_THIS=$(uname -m)
 ARCH_OTHER=$([ "$ARCH_THIS" == "arm64" ] && echo "x86_64" || echo "arm64")
+sw_vers --productVersion
+MACOS_VERSION=$(sw_vers --productVersion)
 
-case $(sw_vers --productVersion) in
-14.*) MACOS_VERSION="sonoma" ;;
-13.*) MACOS_VERSION="ventura" ;;
-12.*) MACOS_VERSION="monterey" ;;
-11.*) MACOS_VERSION="big_sur" ;;
-10.15.*) MACOS_VERSION="catalina" ;;
-10.14.*) MACOS_VERSION="mojave" ;;
-10.13.*) MACOS_VERSION="high_sierra" ;;
-10.12.*) MACOS_VERSION="sierra" ;;
-10.11.*) MACOS_VERSION="el_capitan" ;;
+case $MACOS_VERSION in
+14.*) MACOS_RELEASE="sonoma" ;;
+13.*) MACOS_RELEASE="ventura" ;;
+12.*) MACOS_RELEASE="monterey" ;;
+11.*) MACOS_RELEASE="big_sur" ;;
+10.15.*) MACOS_RELEASE="catalina" ;;
+10.14.*) MACOS_RELEASE="mojave" ;;
+10.13.*) MACOS_RELEASE="high_sierra" ;;
+10.12.*) MACOS_RELEASE="sierra" ;;
+10.11.*) MACOS_RELEASE="el_capitan" ;;
 esac
 
-if [ -z "$MACOS_VERSION" ]; then
-  printf "Cannot get macOS version\n" >&2
+if [ -z "$MACOS_RELEASE" ]; then
+  printf "Cannot get macOS release from version: $MACOS_VERSION\n" >&2
   exit 1
 fi
 
-DOWNLOAD_PROPERTY="$([ "$ARCH_OTHER" == "x86_64" ] && echo "" || echo "${ARCH_OTHER}_")$MACOS_VERSION"
+DOWNLOAD_PROPERTY="$([ "$ARCH_OTHER" == "x86_64" ] && echo "" || echo "${ARCH_OTHER}_")$MACOS_RELEASE"
 
 WORK_DIR=$(mktemp -d)
 
 echo "Homebrew prefix: $HOMEBREW_PREFIX"
-echo "macOS version: $MACOS_VERSION $ARCH_THIS"
-echo "Universify via lipo'ing $ARCH_OTHER"
-echo "formulae.brew.sh download property: $DOWNLOAD_PROPERTY"
+echo "macOS release: $MACOS_RELEASE [$ARCH_THIS]"
+echo "brew info download property: $DOWNLOAD_PROPERTY"
 echo "Work directory: $WORK_DIR"
 
 DOWNLOAD_URLS=$(brew info --json $@ | jq -r '.[] | .bottle.stable.files[. = "'$DOWNLOAD_PROPERTY'"].url')
