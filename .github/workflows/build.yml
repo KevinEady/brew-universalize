@@ -1,0 +1,15 @@
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test
+        run: |
+          sw_vers --productVersion
+          brew install openssl@1.1 glib-openssl mysql-client mysql-connector-c++ openssl@3
+          ./brew-universalize openssl@1.1 glib-openssl mysql-client mysql-connector-c++ openssl@3
