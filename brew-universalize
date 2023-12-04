@@ -13,7 +13,6 @@ HOMEBREW_PREFIX=$(brew --prefix)
 
 ARCH_THIS=$(uname -m)
 ARCH_OTHER=$([ "$ARCH_THIS" == "arm64" ] && echo "x86_64" || echo "arm64")
-/usr/bin/sw_vers -productVersion
 MACOS_VERSION=$(/usr/bin/sw_vers -productVersion)
 
 case $MACOS_VERSION in
@@ -44,7 +43,7 @@ echo "Work directory: $WORK_DIR"
 
 DOWNLOAD_URLS=$(brew info --json $@ | jq -r '.[] | .bottle.stable.files[. = "'$DOWNLOAD_PROPERTY'"].url')
 
-echo "$DOWNLOAD_URLS" | wget -P $WORK_DIR --header "Authorization: Bearer QQ==" -i -
+echo "$DOWNLOAD_URLS" | wget --no-verbose -P $WORK_DIR --header "Authorization: Bearer QQ==" -i -
 
 for DOWNLOAD_URL in $DOWNLOAD_URLS; do
   tar xfz $WORK_DIR/$(basename $DOWNLOAD_URL) -C $WORK_DIR
